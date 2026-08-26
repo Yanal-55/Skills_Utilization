@@ -14,6 +14,11 @@ jobs:
       - name: Check out repository
         uses: actions/checkout@v4
 
+      - name: Create mock .env file for CI
+        run: |
+          echo "DATABASE_URL=postgresql://user:password@db:5432/skills_db" > .env
+          echo "SECRET_KEY=ci_test_secret_key" >> .env
+
       - name: Validate docker-compose file
         run: docker compose config
 
@@ -23,8 +28,8 @@ jobs:
       - name: Build Web Application Image
         run: docker build -t skills-utilization-web:latest .
 
-      - name: Start Vault and DB Services
-        run: docker compose up -d vault db
+      - name: Start Database and Vault Services
+        run: docker compose up -d db vault
 
       - name: Verify Running Containers
         run: docker compose ps
