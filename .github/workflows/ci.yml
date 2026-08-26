@@ -7,13 +7,18 @@ on:
     branches: [ "main" ]
 
 jobs:
-  build-and-test:
+  build-test-and-deploy:
     runs-on: self-hosted
 
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
 
-      - name: Validate Python syntax
+      - name: Validate Python syntax (CI)
         run: |
           python3 -m py_compile app.py config.py seed_courses.py
+
+      - name: Restart Application Service (CD)
+        if: github.ref == 'refs/heads/main'
+        run: |
+          sudo systemctl restart skills-app
