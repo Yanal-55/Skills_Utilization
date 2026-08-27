@@ -18,6 +18,25 @@ jobs:
         run: |
           python3 -m py_compile app.py config.py seed_courses.py
 
+      - name: Create .env file from GitHub Secrets (CD)
+        if: github.ref == 'refs/heads/main'
+        run: |
+          cat <<EOF > .env
+          POSTGRES_USER=${{ secrets.POSTGRES_USER }}
+          POSTGRES_PASSWORD=${{ secrets.POSTGRES_PASSWORD }}
+          POSTGRES_DB=${{ secrets.POSTGRES_DB }}
+          EOF
+
+      - name: Ensure Vault Directories Exist (CD)
+        if: github.ref == 'refs/heads/main'
+        run: |
+          mkdir -p vault/config vault/data
+
+      - name: Start Containers with Docker Compose (CD)
+        if: github.ref == 'refs/heads/main'
+        run: |
+          docker compose up -d --build
+
       - name: Restart Application Service (CD)
         if: github.ref == 'refs/heads/main'
         run: |
