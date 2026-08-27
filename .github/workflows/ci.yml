@@ -25,6 +25,8 @@ jobs:
           POSTGRES_USER=${{ secrets.POSTGRES_USER }}
           POSTGRES_PASSWORD=${{ secrets.POSTGRES_PASSWORD }}
           POSTGRES_DB=${{ secrets.POSTGRES_DB }}
+          DATABASE_URL=postgresql://${{ secrets.POSTGRES_USER }}:${{ secrets.POSTGRES_PASSWORD }}@db:5432/${{ secrets.POSTGRES_DB }}
+          SECRET_KEY=your_secret_key
           EOF
 
       - name: Ensure Vault Directories Exist (CD)
@@ -35,7 +37,7 @@ jobs:
       - name: Start Containers with Docker Compose (CD)
         if: github.ref == 'refs/heads/main'
         run: |
-          docker compose up -d --build
+          docker compose --env-file .env up -d --build
 
       - name: Restart Application Service (CD)
         if: github.ref == 'refs/heads/main'
