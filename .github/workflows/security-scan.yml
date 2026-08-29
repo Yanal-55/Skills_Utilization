@@ -1,0 +1,36 @@
+name: Security Scans
+
+on:
+  push:
+    branches: [ "main", "master" ]
+  pull_request:
+    branches: [ "main", "master" ]
+
+jobs:
+  security-scans:
+    name: Run TruffleHog, Hadolint, and Bandit
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Run TruffleHog (Secret Scan)
+        uses: trufflesecurity/trufflehog-actions-scan@v3.88.15
+
+      - name: Run Hadolint (Dockerfile Lint)
+        uses: hadolint/hadolint-action@v3.1.0
+        with:
+          dockerfile: Dockerfile
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.x'
+
+      - name: Run Bandit (Python Security Scan)
+        run: |
+          pip install bandit
+          bandit -r .
