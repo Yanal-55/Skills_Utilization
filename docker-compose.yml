@@ -42,7 +42,7 @@ services:
     restart: "no"
 
   web:
-    build: .
+    image: ghcr.io/yanal-55/skills_utilization:latest
     ports:
       - "5000:5000"
     environment:
