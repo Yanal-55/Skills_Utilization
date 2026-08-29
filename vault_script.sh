@@ -1,17 +1,18 @@
 #!/bin/bash
 
 # Variables
-VAULT_ADDR='http://127.0.0.1:8200'
-VAULT_TOKEN='root'
-SECRET_PATH='kv/project3'
-ENV_FILE='./.env'
+CONTAINER_NAME="skills_utilization-vault-1"
+SECRET_PATH="kv/project3"
+ENV_FILE="./.env"
 
-export VAULT_ADDR
-export VAULT_TOKEN
+# Ensure Vault service is up
+echo "Ensuring Vault service is up..."
+docker compose up -d vault
+sleep 2
 
-# Retrieve secrets from Vault
+# Retrieve secrets directly inside the container via docker exec
 echo "Retrieving secrets from Vault..."
-SECRETS=$(vault kv get -format=json $SECRET_PATH)
+SECRETS=$(docker exec -e VAULT_ADDR='http://127.0.0.1:8200' -e VAULT_TOKEN='root' "$CONTAINER_NAME" vault kv get -format=json $SECRET_PATH)
 
 # Check if retrieval was successful
 if [ $? -ne 0 ]; then
@@ -19,7 +20,7 @@ if [ $? -ne 0 ]; then
   exit 1
 fi
 
-# Extract data and save to .env file
+# Extract data and save to .env file locally
 echo "Saving secrets to $ENV_FILE..."
 echo "$SECRETS" | jq -r '.data.data | to_entries[] | .key + "=" + .value' > "$ENV_FILE"
 
@@ -29,6 +30,6 @@ if [ $? -ne 0 ]; then
   exit 1
 fi
 
-# Run Docker with .env file
-echo "Running Docker container..."
-docker compose --env-file "$ENV_FILE" up -d
+# Run remaining Docker containers with .env file
+echo "Running Docker containers..."
+docker compose --env-file "$ENV_FILE" up -d --remove-orphans
