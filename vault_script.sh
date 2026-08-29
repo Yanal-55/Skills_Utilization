@@ -4,7 +4,7 @@
 VAULT_ADDR='http://127.0.0.1:8200'
 VAULT_TOKEN='root'
 SECRET_PATH='kv/project3'
-ENV_FILE='/root/<path_in_server>/.env'
+ENV_FILE='./.env'
 
 export VAULT_ADDR
 export VAULT_TOKEN
