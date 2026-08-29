@@ -2,44 +2,99 @@ name: Skills Utilization CI/CD Pipeline
 
 on:
   push:
-    branches: [ "main" ]
+    branches:
+      - main
   pull_request:
-    branches: [ "main" ]
+    branches:
+      - main
+
+permissions:
+  contents: read
 
 jobs:
   build-test-and-deploy:
     runs-on: self-hosted
 
     steps:
-      - name: Check out repository
+      - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Validate Python syntax (CI)
+      - name: Validate Python syntax
         run: |
           python3 -m py_compile app.py config.py seed_courses.py
 
-      - name: Create .env file from GitHub Secrets (CD)
+      # Only deploy pushes to main
+      - name: Create temporary .env
         if: github.ref == 'refs/heads/main'
         run: |
-          cat <<EOF > .env
+          cat > .env <<EOF
           POSTGRES_USER=${{ secrets.POSTGRES_USER }}
           POSTGRES_PASSWORD=${{ secrets.POSTGRES_PASSWORD }}
           POSTGRES_DB=${{ secrets.POSTGRES_DB }}
           DATABASE_URL=postgresql://${{ secrets.POSTGRES_USER }}:${{ secrets.POSTGRES_PASSWORD }}@db:5432/${{ secrets.POSTGRES_DB }}
-          SECRET_KEY=your_secret_key
+          POSTGRES_HOST=db
           EOF
 
-      - name: Ensure Vault Directories Exist (CD)
+      - name: Stop old application containers
         if: github.ref == 'refs/heads/main'
         run: |
-          mkdir -p vault/config vault/data
+          docker compose down --remove-orphans || true
 
-      - name: Start Containers with Docker Compose (CD)
+      - name: Start PostgreSQL and Vault
         if: github.ref == 'refs/heads/main'
         run: |
-          docker compose --env-file .env up -d --build
+          docker compose up -d db vault
 
-      - name: Restart Application Service (CD)
+      - name: Wait for Vault
         if: github.ref == 'refs/heads/main'
         run: |
-          sudo systemctl restart skills-app
+          for i in {1..30}; do
+            if curl -fsS http://localhost:8200/v1/sys/health >/dev/null 2>&1; then
+              echo "Vault is ready"
+              break
+            fi
+
+            echo "Waiting for Vault..."
+            sleep 2
+          done
+
+      - name: Initialize Vault KV and store secrets
+        if: github.ref == 'refs/heads/main'
+        run: |
+          docker exec \
+            -e VAULT_ADDR=http://127.0.0.1:8200 \
+            -e VAULT_TOKEN=root \
+            skills_utilization-vault-1 \
+            vault secrets enable -path=kv kv-v2 2>/dev/null || true
+
+          docker exec \
+            -e VAULT_ADDR=http://127.0.0.1:8200 \
+            -e VAULT_TOKEN=root \
+            skills_utilization-vault-1 \
+            vault kv put kv/project3 \
+            DATABASE_URL="postgresql://${{ secrets.POSTGRES_USER }}:${{ secrets.POSTGRES_PASSWORD }}@db:5432/${{ secrets.POSTGRES_DB }}" \
+            POSTGRES_DB="${{ secrets.POSTGRES_DB }}" \
+            POSTGRES_USER="${{ secrets.POSTGRES_USER }}" \
+            POSTGRES_PASSWORD="${{ secrets.POSTGRES_PASSWORD }}" \
+            POSTGRES_HOST="db"
+
+      - name: Load secrets from Vault
+        if: github.ref == 'refs/heads/main'
+        run: |
+          docker compose run --rm secrets-init
+
+      - name: Start application
+        if: github.ref == 'refs/heads/main'
+        run: |
+          docker compose up -d web
+
+      - name: Verify containers
+        if: github.ref == 'refs/heads/main'
+        run: |
+          docker compose ps
+
+      - name: Verify application
+        if: github.ref == 'refs/heads/main'
+        run: |
+          sleep 5
+          curl -f http://localhost:8080
