@@ -1,0 +1,69 @@
+name: Security Scanning
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  security-scan:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Create results directory
+        run: |
+          mkdir -p security-results
+
+      # -------------------------
+      # Bandit
+      # -------------------------
+      - name: Run Bandit
+        continue-on-error: true
+        run: |
+          pip install bandit
+          bandit -r . -f txt > security-results/bandit.txt 2>&1 || true
+
+      # -------------------------
+      # Hadolint
+      # -------------------------
+      - name: Run Hadolint
+        continue-on-error: true
+        run: |
+          touch security-results/hadolint.txt
+
+          for dockerfile in $(find . -name 'Dockerfile' -type f); do
+            echo "========================================" >> security-results/hadolint.txt
+            echo "Dockerfile: $dockerfile" >> security-results/hadolint.txt
+            echo "========================================" >> security-results/hadolint.txt
+
+            docker run --rm \
+              -i \
+              hadolint/hadolint \
+              < "$dockerfile" >> security-results/hadolint.txt 2>&1 || true
+          done
+
+      # -------------------------
+      # TruffleHog
+      # -------------------------
+      - name: Run TruffleHog
+        continue-on-error: true
+        run: |
+          trufflehog filesystem . \
+            --json \
+            > security-results/trufflehog.txt 2>&1 || true
+
+      # -------------------------
+      # Upload all results
+      # -------------------------
+      - name: Upload security results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: security-results
+          path: security-results/
