@@ -20,38 +20,58 @@ jobs:
         run: |
           mkdir -p security-results
 
-      # -------------------------
-      # Bandit
-      # -------------------------
+      # =========================
+      # BANDIT
+      # =========================
       - name: Run Bandit
         continue-on-error: true
         run: |
-          pip install bandit
-          bandit -r . -f txt > security-results/bandit.txt 2>&1 || true
+          echo "===== BANDIT SECURITY SCAN =====" | tee security-results/bandit.txt
 
-      # -------------------------
-      # Hadolint
-      # -------------------------
+          python -m pip install bandit
+
+          bandit -r . -f txt 2>&1 | tee -a security-results/bandit.txt || true
+
+          echo "" | tee -a security-results/bandit.txt
+          echo "===== END BANDIT SCAN =====" | tee -a security-results/bandit.txt
+
+      # =========================
+      # HADOLINT
+      # =========================
       - name: Run Hadolint
         continue-on-error: true
         run: |
-          touch security-results/hadolint.txt
+          echo "===== HADOLINT DOCKERFILE SCAN =====" | tee security-results/hadolint.txt
 
-          for dockerfile in $(find . -name 'Dockerfile' -type f); do
-            echo "========================================" >> security-results/hadolint.txt
-            echo "Dockerfile: $dockerfile" >> security-results/hadolint.txt
-            echo "========================================" >> security-results/hadolint.txt
+          docker pull hadolint/hadolint:latest
 
-            docker run --rm \
-              -i \
-              hadolint/hadolint \
-              < "$dockerfile" >> security-results/hadolint.txt 2>&1 || true
-          done
+          dockerfiles=$(find . -name 'Dockerfile' -type f)
 
-      # -------------------------
-      # TruffleHog
-      # -------------------------
-           - name: Run TruffleHog
+          if [ -z "$dockerfiles" ]; then
+            echo "No Dockerfiles found." | tee -a security-results/hadolint.txt
+          else
+            for dockerfile in $dockerfiles; do
+
+              echo "" | tee -a security-results/hadolint.txt
+              echo "========================================" | tee -a security-results/hadolint.txt
+              echo "Dockerfile: $dockerfile" | tee -a security-results/hadolint.txt
+              echo "========================================" | tee -a security-results/hadolint.txt
+
+              docker run --rm \
+                -i \
+                hadolint/hadolint:latest \
+                < "$dockerfile" 2>&1 | tee -a security-results/hadolint.txt || true
+
+            done
+          fi
+
+          echo "" | tee -a security-results/hadolint.txt
+          echo "===== END HADOLINT SCAN =====" | tee -a security-results/hadolint.txt
+
+      # =========================
+      # TRUFFLEHOG
+      # =========================
+      - name: Run TruffleHog
         continue-on-error: true
         run: |
           echo "===== TRUFFLEHOG SECRET SCAN =====" | tee security-results/trufflehog.txt
@@ -64,9 +84,32 @@ jobs:
           echo "" | tee -a security-results/trufflehog.txt
           echo "===== END TRUFFLEHOG SCAN =====" | tee -a security-results/trufflehog.txt
 
-      # -------------------------
-      # Upload all results
-      # -------------------------
+      # =========================
+      # DISPLAY RESULTS
+      # =========================
+      - name: Display security results
+        if: always()
+        run: |
+          echo ""
+          echo "########################################"
+          echo "#       SECURITY SCAN RESULTS          #"
+          echo "########################################"
+
+          echo ""
+          echo "========== BANDIT =========="
+          cat security-results/bandit.txt || true
+
+          echo ""
+          echo "========== HADOLINT =========="
+          cat security-results/hadolint.txt || true
+
+          echo ""
+          echo "========== TRUFFLEHOG =========="
+          cat security-results/trufflehog.txt || true
+
+      # =========================
+      # UPLOAD RESULTS
+      # =========================
       - name: Upload security results
         if: always()
         uses: actions/upload-artifact@v4
