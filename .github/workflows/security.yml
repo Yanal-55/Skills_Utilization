@@ -51,12 +51,18 @@ jobs:
       # -------------------------
       # TruffleHog
       # -------------------------
-      - name: Run TruffleHog
+           - name: Run TruffleHog
         continue-on-error: true
         run: |
-          trufflehog filesystem . \
-            --json \
-            > security-results/trufflehog.txt 2>&1 || true
+          echo "===== TRUFFLEHOG SECRET SCAN =====" | tee security-results/trufflehog.txt
+
+          docker run --rm \
+            -v "$PWD:/repo" \
+            trufflesecurity/trufflehog:latest \
+            filesystem /repo --json 2>&1 | tee -a security-results/trufflehog.txt || true
+
+          echo "" | tee -a security-results/trufflehog.txt
+          echo "===== END TRUFFLEHOG SCAN =====" | tee -a security-results/trufflehog.txt
 
       # -------------------------
       # Upload all results
